@@ -1,0 +1,388 @@
+import ast
+import operator
+import random
+import time
+import tkinter as tk
+from tkinter import messagebox
+
+
+MENU_ITEMS = [
+    ("Fries Meal", 25),
+    ("Lunch Meal", 40),
+    ("Burger Meal", 35),
+    ("Pizza Meal", 50),
+    ("Cheese Burger", 30),
+    ("Drinks", 35),
+]
+
+BACKGROUND = "#d9d9d9"
+ACCENT = "#4d8fbd"
+FIELD_BACKGROUND = "#b0e0e6"
+
+
+def evaluate_expression(expression):
+    """Evaluate basic calculator arithmetic without executing arbitrary code."""
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+    }
+
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in operators:
+            return operators[type(node.op)](evaluate(node.left), evaluate(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in operators:
+            return operators[type(node.op)](evaluate(node.operand))
+        raise ValueError("Only basic arithmetic is supported.")
+
+    return evaluate(ast.parse(expression, mode="eval"))
+
+
+class RestaurantManagementSystem:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Restaurant Management System")
+        self.root.geometry("1500x700")
+        self.root.minsize(1180, 620)
+        self.root.configure(bg=BACKGROUND)
+
+        self.quantities = {
+            name: tk.StringVar(value="") for name, _ in MENU_ITEMS
+        }
+        self.order_number = tk.StringVar(value="")
+        self.subtotal = tk.StringVar(value="")
+        self.service_charge = tk.StringVar(value="")
+        self.tax = tk.StringVar(value="")
+        self.total = tk.StringVar(value="")
+        self.calculator_display = tk.StringVar(value="")
+
+        self._build_header()
+        self._build_order_form()
+        self._build_calculator()
+
+    def _build_header(self):
+        header = tk.Frame(self.root, bg=BACKGROUND)
+        header.pack(fill="x", pady=(12, 28))
+
+        tk.Label(
+            header,
+            text="Restaurant Management System",
+            bg=BACKGROUND,
+            fg=ACCENT,
+            font=("Arial", 30, "bold"),
+        ).pack()
+
+        clock_row = tk.Frame(header, bg=BACKGROUND)
+        clock_row.pack(pady=(6, 0))
+        tk.Label(
+            clock_row,
+            text="",
+            width=16,
+            bg="white",
+            font=("Arial", 14),
+        ).pack(side="left", padx=4)
+        self.clock_label = tk.Label(
+            clock_row,
+            bg=BACKGROUND,
+            fg=ACCENT,
+            font=("Arial", 19),
+        )
+        self.clock_label.pack(side="left")
+        tk.Label(
+            clock_row,
+            text="",
+            width=16,
+            bg="white",
+            font=("Arial", 14),
+        ).pack(side="left", padx=4)
+        self._update_clock()
+
+    def _update_clock(self):
+        self.clock_label.configure(
+            text=time.strftime("%a %b %d %H:%M:%S %Y")
+        )
+        self.root.after(1000, self._update_clock)
+
+    def _build_order_form(self):
+        content = tk.Frame(self.root, bg=BACKGROUND)
+        content.pack(fill="both", expand=True, padx=28, pady=(78, 22))
+        content.grid_columnconfigure(0, weight=1)
+        content.grid_columnconfigure(1, weight=1)
+        content.grid_columnconfigure(2, weight=0, minsize=330)
+        content.grid_rowconfigure(0, weight=1)
+
+        order_panel = tk.Frame(content, bg=BACKGROUND)
+        order_panel.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=(0, 30))
+        for column in (1, 3):
+            order_panel.grid_columnconfigure(column, weight=1)
+
+        left_fields = [
+            ("Order No.", self.order_number, True),
+            *[(name, self.quantities[name], False) for name, _ in MENU_ITEMS[:5]],
+        ]
+        right_fields = [
+            (MENU_ITEMS[5][0], self.quantities[MENU_ITEMS[5][0]], False),
+            ("cost", self.subtotal, True),
+            ("Service Charge", self.service_charge, True),
+            ("Tax", self.tax, True),
+            ("Subtotal", self.subtotal, True),
+            ("Total", self.total, True),
+        ]
+
+        self._add_fields(order_panel, left_fields, column=0, label_width=17)
+        self._add_fields(order_panel, right_fields, column=1, label_width=19)
+
+        buttons = tk.Frame(order_panel, bg=BACKGROUND)
+        buttons.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        for column in range(4):
+            buttons.grid_columnconfigure(column, weight=1)
+
+        actions = [
+            ("PRICE", self.show_price_list),
+            ("TOTAL", self.calculate_total),
+            ("RESET", self.reset),
+            ("EXIT", self.exit),
+        ]
+        for column, (label, command) in enumerate(actions):
+            tk.Button(
+                buttons,
+                text=label,
+                command=command,
+                bg=FIELD_BACKGROUND,
+                activebackground="#a3d5dc",
+                font=("Arial", 15, "bold"),
+                relief="raised",
+                bd=7,
+                padx=10,
+                pady=8,
+            ).grid(row=0, column=column, sticky="ew", padx=(0, 14))
+
+    def _add_fields(self, parent, fields, column, label_width):
+        for row, (label, variable, readonly) in enumerate(fields):
+            tk.Label(
+                parent,
+                text=label,
+                width=label_width,
+                anchor="e",
+                bg=BACKGROUND,
+                fg=ACCENT,
+                font=("Arial", 14, "bold"),
+            ).grid(row=row, column=column * 2, sticky="e", padx=(0, 10), pady=5)
+
+            entry = tk.Entry(
+                parent,
+                textvariable=variable,
+                justify="right",
+                font=("Arial", 15, "bold"),
+                bg=FIELD_BACKGROUND,
+                relief="ridge",
+                bd=5,
+                width=19,
+            )
+            if readonly:
+                entry.configure(state="readonly", readonlybackground=FIELD_BACKGROUND)
+            else:
+                entry.bind(
+                    "<KeyRelease>",
+                    lambda _event: self._clear_totals(),
+                )
+            entry.grid(
+                row=row,
+                column=column * 2 + 1,
+                sticky="ew",
+                padx=(0, 14 if column == 0 else 0),
+                pady=5,
+                ipady=2,
+            )
+
+    def _build_calculator(self):
+        panel = tk.Frame(self.root, bg=BACKGROUND)
+        panel.place(relx=0.77, rely=0.28, relwidth=0.21, relheight=0.59)
+        for column in range(4):
+            panel.grid_columnconfigure(column, weight=1)
+
+        display = tk.Entry(
+            panel,
+            textvariable=self.calculator_display,
+            justify="right",
+            font=("Arial", 19, "bold"),
+            bg="white",
+            relief="sunken",
+            bd=5,
+        )
+        display.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 8), ipady=4)
+
+        keys = [
+            ("7", "8", "9", "+"),
+            ("4", "5", "6", "-"),
+            ("1", "2", "3", "*"),
+            ("0", "c", ".", "/"),
+        ]
+        for row, key_row in enumerate(keys, start=1):
+            for column, key in enumerate(key_row):
+                tk.Button(
+                    panel,
+                    text=key,
+                    command=lambda value=key: self.calculator_click(value),
+                    bg=FIELD_BACKGROUND,
+                    activebackground="#a3d5dc",
+                    font=("Arial", 16, "bold"),
+                    relief="raised",
+                    bd=5,
+                ).grid(
+                    row=row,
+                    column=column,
+                    sticky="nsew",
+                    padx=5,
+                    pady=3,
+                    ipady=8,
+                )
+
+        tk.Button(
+            panel,
+            text="=",
+            command=self.calculator_equals,
+            bg=FIELD_BACKGROUND,
+            activebackground="#a3d5dc",
+            font=("Arial", 17, "bold"),
+            relief="raised",
+            bd=6,
+        ).grid(row=5, column=0, columnspan=4, sticky="ew", padx=5, pady=(4, 2), ipady=8)
+
+        tk.Label(
+            panel,
+            text="-By Codingal",
+            bg="#eeeeee",
+            font=("Arial", 12, "bold"),
+            relief="groove",
+            bd=2,
+        ).grid(row=6, column=0, columnspan=4, sticky="ew", padx=10, pady=(0, 4))
+
+    def calculate_total(self):
+        quantities = {}
+        try:
+            for name, _price in MENU_ITEMS:
+                raw_quantity = self.quantities[name].get().strip()
+                quantity = int(raw_quantity or "0")
+                if quantity < 0:
+                    raise ValueError
+                quantities[name] = quantity
+        except ValueError:
+            messagebox.showerror(
+                "Invalid quantity",
+                "Enter a whole number of zero or more for each menu item.",
+                parent=self.root,
+            )
+            return
+
+        subtotal = sum(
+            quantities[name] * price for name, price in MENU_ITEMS
+        )
+        service_charge = subtotal / 99
+        tax = subtotal * 0.33
+        total = subtotal + service_charge + tax
+
+        self.order_number.set(str(random.randint(12980, 500876)))
+        self.subtotal.set(self._money(subtotal))
+        self.service_charge.set(self._money(service_charge))
+        self.tax.set(self._money(tax))
+        self.total.set(self._money(total))
+
+    @staticmethod
+    def _money(amount):
+        return "Rs. {:.2f}".format(amount)
+
+    def _clear_totals(self):
+        self.order_number.set("")
+        self.subtotal.set("")
+        self.service_charge.set("")
+        self.tax.set("")
+        self.total.set("")
+
+    def reset(self):
+        for quantity in self.quantities.values():
+            quantity.set("")
+        self._clear_totals()
+        self.calculator_display.set("")
+
+    def show_price_list(self):
+        price_window = tk.Toplevel(self.root)
+        price_window.title("Price List")
+        price_window.configure(bg=BACKGROUND)
+        price_window.resizable(False, False)
+        price_window.transient(self.root)
+
+        tk.Label(
+            price_window,
+            text="ITEM                         PRICE",
+            bg=BACKGROUND,
+            fg="black",
+            font=("Arial", 13, "bold"),
+            padx=18,
+            pady=10,
+        ).pack(fill="x")
+
+        for name, price in MENU_ITEMS:
+            row = tk.Frame(price_window, bg=BACKGROUND)
+            row.pack(fill="x", padx=18, pady=2)
+            tk.Label(
+                row,
+                text=name,
+                width=20,
+                anchor="w",
+                bg=BACKGROUND,
+                fg=ACCENT,
+                font=("Arial", 13, "bold"),
+            ).pack(side="left")
+            tk.Label(
+                row,
+                text=str(price),
+                width=8,
+                anchor="e",
+                bg=BACKGROUND,
+                fg=ACCENT,
+                font=("Arial", 13, "bold"),
+            ).pack(side="right")
+
+        price_window.grab_set()
+
+    def calculator_click(self, value):
+        if value.lower() == "c":
+            self.calculator_display.set("")
+        else:
+            self.calculator_display.set(self.calculator_display.get() + value)
+
+    def calculator_equals(self):
+        expression = self.calculator_display.get().strip()
+        if not expression:
+            return
+        try:
+            result = evaluate_expression(expression)
+            self.calculator_display.set(str(result))
+        except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
+            messagebox.showerror(
+                "Calculator",
+                "Enter a valid arithmetic expression.",
+                parent=self.root,
+            )
+
+    def exit(self):
+        if messagebox.askyesno(
+            "Exit",
+            "Are you sure you want to exit?",
+            parent=self.root,
+        ):
+            self.root.destroy()
+
+
+if __name__ == "__main__":
+    window = tk.Tk()
+    RestaurantManagementSystem(window)
+    window.mainloop()
